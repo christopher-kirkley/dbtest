@@ -1,0 +1,32 @@
+<h1>Import Income</h1>
+
+<h2>Select Income CSV</h2>
+<form method="post" enctype="multipart/form-data">
+    <input type="file" name="file">
+    <select name="statement_type">
+        <option value="bandcamp_statement">Bandcamp</option>
+        <option value="shopify_statement">Shopify</option>
+        <option value="Secretly Distribution">Secretly Distribution</option>
+        <option value="SDS">SDS</option>
+    </select>
+    <input type="submit" value="Upload">
+</form>
+<hr>
+<h2>Pending Imports</h2>
+<form method="post">
+		<ul id="pending">
+				{% for source, statements in imported_statements.items() %}
+				<li><b>{{ source.upper() }}</b></li>
+					{% for statement in statements %}
+						{{ statement }}
+					{% endfor %}
+				{% endfor %}
+		</ul>
+		<input type="submit" name="fix" value="Fix Errors">
+		<input type="submit">
+</form>
+
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
+<script>
+
+</script>
