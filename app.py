@@ -61,17 +61,61 @@ class Statement:
     
     def create_df(self):
         self.df = pd.read_csv(self.file, encoding=self.encoding)
-        self.columns = ['id', 'distributor', 'date', 'order_id', 'upc_id', 'isrc_id', 'version_id', 'catalog_id',
+        self.columns_for_db = ['id', 'distributor', 'date', 'order_id', 'upc_id', 'isrc_id', 'version_id', 'catalog_id',
                         'album_name', 'track_name', 'quantity', 'label_net', 'customer', 'city', 'region', 'country',
                         'type', 'class', 'product', 'variant']
-        self.filename = self.file.filename 
-        
+
+    def insert_to_db(self):
+        pass    
+
 class BandcampStatement(Statement):
     def __init__(self, file):
         super().__init__(file)
         self.name = 'bandcamp'
         self.encoding = 'utf-16'
 
+    def clean(self):
+
+        """Clean data."""
+        self.df.drop(self.df[self.df['item type'] == 'payout'].index, inplace=True)
+        types_to_change = ['refund', 'reversal']
+        self.df.loc[self.df['item type'].isin(types_to_change), 'net amount'] = self.df['change to payout balance']
+        self.df.loc[self.df['item type']=='album', 'item type'] = 'digital'
+        self.df.loc[self.df['item type']=='track', 'item type'] = 'digital'
+        self.df.loc[self.df['item type']=='package', 'item type'] = 'physical'
+        
+        """using numpy"""
+        #self.df['net amount'] = np.where(self.df['item type']=='reversal', self.df['change to payout balance'], self.df['net amount'])
+        #self.df['net amount'] = np.where(self.df['item type']=='refund', self.df['change to payout balance'], self.df['net amount'])
+        #self.df['item type'] = np.where(self.df['item type'] == 'album', 'digital', 'physical')
+        self.df['sku'] = np.where(self.df['item type']=='digital', self.df['catalog number']+'digi', self.df['sku'])
+        
+        """Reformat strings."""
+        self.df['date'] = pd.to_datetime(self.df['date'])
+        self.df['date'] = self.df['date'].dt.strftime('%Y-%m-%d')
+
+        """Remap columns, drop extraneous, add missing."""
+        self.df.rename(columns={'date':'date',
+                                'bandcamp transaction':'order_id',
+                                'upc':'upc_id',
+                                'isrc':'isrc_id',
+                                'sku':'version_id',
+                                'catalog number':'catalog_id',
+                                'quantity':'quantity',
+                                'net amount':'net',
+                                'city':'city',
+                                'region/state':'region',
+                                'country':'_country',
+                                'country code':'country',
+                                'item type':'type',
+                                },
+                                inplace=True)
+        self.df = self.df.reindex(columns=self.columns_for_db) # Add needed columns, drop extraneous columns
+        self.df.to_sql('pending', con=db.engine, if_exists = 'append')
+        
+
+
+        
 class ShopifyStatement(Statement):
     def __init__(self, file):
         super().__init__(file)
@@ -104,9 +148,10 @@ def import_income():
             statement = StatementFactory.get_statement(file, statement_type)
             statement.create_df()
             """clean and import into db"""
-            imported_statements[statement.name].append(statement.filename)            
+        imported_statements[statement.name].append(file.filename)            
 
     return render_template('import_income.html', imported_statements=imported_statements)
+
 
 """Conditional to run the application."""
 if __name__ == '__main__':
